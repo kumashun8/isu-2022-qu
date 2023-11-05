@@ -49,9 +49,13 @@ var (
 
 	sqliteDriverName = "sqlite3"
 
-	mu sync.Mutex
+	muID sync.Mutex
 
 	uniqueID int64 = 1
+
+	muVH sync.Mutex
+
+	visitHistoryExists = map[string]bool{}
 )
 
 // 環境変数を取得する、なければデフォルト値を返す
@@ -104,8 +108,8 @@ func createTenantDB(id int64) error {
 
 // システム全体で一意なIDを生成する
 func dispenseID() string {
-	mu.Lock()
-	defer mu.Unlock()
+	muID.Lock()
+	defer muID.Unlock()
 	uniqueID++
 	return fmt.Sprintf("%x", uniqueID)
 }
@@ -1318,15 +1322,21 @@ func competitionRankingHandler(c echo.Context) error {
 		return fmt.Errorf("error Select tenant: id=%d, %w", v.tenantID, err)
 	}
 
-	if _, err := adminDB.ExecContext(
-		ctx,
-		"INSERT INTO visit_history (player_id, tenant_id, competition_id, created_at, updated_at) VALUES (?, ?, ?, ?, ?)",
-		v.playerID, tenant.ID, competitionID, now, now,
-	); err != nil {
-		return fmt.Errorf(
-			"error Insert visit_history: playerID=%s, tenantID=%d, competitionID=%s, createdAt=%d, updatedAt=%d, %w",
-			v.playerID, tenant.ID, competitionID, now, now, err,
-		)
+	vhKey := v.playerID + fmt.Sprintf("%d", tenant.ID) + competitionID
+	if !visitHistoryExists[vhKey] {
+		if _, err := adminDB.ExecContext(
+			ctx,
+			"INSERT INTO visit_history (player_id, tenant_id, competition_id, created_at, updated_at) VALUES (?, ?, ?, ?, ?)",
+			v.playerID, tenant.ID, competitionID, now, now,
+		); err != nil {
+			return fmt.Errorf(
+				"error Insert visit_history: playerID=%s, tenantID=%d, competitionID=%s, createdAt=%d, updatedAt=%d, %w",
+				v.playerID, tenant.ID, competitionID, now, now, err,
+			)
+		}
+		muVH.Lock()
+		visitHistoryExists[vhKey] = true
+		muVH.Unlock()
 	}
 
 	var rankAfter int64

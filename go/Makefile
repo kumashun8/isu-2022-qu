@@ -15,7 +15,7 @@ survey: survey.slowlog survey.nginx
 restart-app:
 	rm -f /tmp/webapp.sock
 	sudo systemctl restart $(SERVICE_NAME)
-	sudo systemctl status $(SERVICE_NAME) | tail -n 5
+	sudo journalctl -u $(SERVICE_NAME) -f
 
 restart-nginx:
 	sudo rsync -av ../conf/nginx/ /etc/nginx/
