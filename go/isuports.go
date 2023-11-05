@@ -1322,22 +1322,19 @@ func competitionRankingHandler(c echo.Context) error {
 		return fmt.Errorf("error Select tenant: id=%d, %w", v.tenantID, err)
 	}
 
-	vhKey := v.playerID + fmt.Sprintf("%d", tenant.ID) + competitionID
-	if !visitHistoryExists[vhKey] {
-		if _, err := adminDB.ExecContext(
-			ctx,
-			"INSERT INTO visit_history (player_id, tenant_id, competition_id, created_at, updated_at) VALUES (?, ?, ?, ?, ?)",
-			v.playerID, tenant.ID, competitionID, now, now,
-		); err != nil {
-			return fmt.Errorf(
-				"error Insert visit_history: playerID=%s, tenantID=%d, competitionID=%s, createdAt=%d, updatedAt=%d, %w",
-				v.playerID, tenant.ID, competitionID, now, now, err,
-			)
-		}
+	go func() {
+		vhKey := v.playerID + fmt.Sprintf("%d", tenant.ID) + competitionID
 		muVH.Lock()
-		visitHistoryExists[vhKey] = true
+		if !visitHistoryExists[vhKey] {
+			adminDB.ExecContext(
+				ctx,
+				"INSERT INTO visit_history (player_id, tenant_id, competition_id, created_at, updated_at) VALUES (?, ?, ?, ?, ?)",
+				v.playerID, tenant.ID, competitionID, now, now,
+			)
+			visitHistoryExists[vhKey] = true
+		}
 		muVH.Unlock()
-	}
+	}()
 
 	var rankAfter int64
 	rankAfterStr := c.QueryParam("rank_after")
